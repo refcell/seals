@@ -20,6 +20,13 @@ src
 └─ Seal — "The Seal Coordination Contract"
 ```
 
+## Glossary
+
+We use Primitive and Maker's approach of Unconvential Naming inspired by [The Dangers of Surprising Code](https://samczsun.com/the-dangers-of-surprising-code/) h/t [Alex](https://twitter.com/alexangelj) [Mistrusting Variable Names](https://twitter.com/alexangelj/status/1491280313162813441?s=20&t=NoFpNkO9orH8OZ34-DIfMQ).
+
+
+`
+
 ## Development
 
 [seals](https://github.com/abigger87/seals) is built with [Foundry](https://github.com/gaskonst/foundry) but remains backwards compatible with [DappTools](https://dapp.tools/).
