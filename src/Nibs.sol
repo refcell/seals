@@ -7,7 +7,7 @@ import {ERC20} from "@solmate/tokens/ERC20.sol";
 /// @notice Project Shares for a given Seal
 /// @notice Adapted from LilJuicebox in https://github.com/m1guelpf/lil-web3
 /// @author Andreas Bigger <andreas@nascent.xyz>
-contract Nibs is ERC20{
+contract Nibs is ERC20 {
 	/// @notice Prevents unauthorized token minting or burning
 	error Unauthorized();
 
@@ -15,10 +15,10 @@ contract Nibs is ERC20{
 	address public immutable seal;
 
 	/// @notice Deploys Nibs with the name and symbol metadata
+  /// @dev Deployed from the Floe Factory
 	/// @param name The name of the deployed token
 	/// @param symbol The symbol of the deployed token
   /// @param seal_ The Seal that manages this contract
-	/// @dev Deployed from the constructor of the LilJuicebox contract
 	constructor(string memory name, string memory symbol, address seal_) payable ERC20(name, symbol, 18) {
 		seal = seal_;
 	}
