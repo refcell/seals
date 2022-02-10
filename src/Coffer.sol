@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
+import {IERC20} from "./interfaces/IERC20.sol";
+import {QuorumAuthority} from "./authorities/QuorumAuthority.sol";
+
 import {Auth} from "@solmate/auth/Auth.sol";
 
 /// @title Coffer
@@ -8,7 +11,7 @@ import {Auth} from "@solmate/auth/Auth.sol";
 /// @dev Uses Auth patterns as demonstrated in https://github.com/Rari-Capital/vaults/blob/main/src/Vault.sol
 /// @dev Adapted from Lil Gnosis in https://github.com/m1guelpf/lil-web3
 /// @author Andreas Bigger <andreas@nascent.xyz>
-contract Coffer is Auth {
+contract Coffer is QuorumAuthority {
 
   /// >>>>>>>>>>>>>>>>>>>>  CUSTOM ERRORS  <<<<<<<<<<<<<<<<<<<<< ///
 
@@ -18,27 +21,31 @@ contract Coffer is Auth {
 	/// @notice Thrown when the execution of the requested transaction fails
 	error ExecutionFailed();
 
+  /// @notice Thrown when uncork fails
+  error JammedCork();
+
   /// >>>>>>>>>>>>>>>>>>>>  CUSTOM EVENTS  <<<<<<<<<<<<<<<<<<<<< ///
 
-	/// @notice Emitted when the number of required signatures is updated
-	/// @param newQuorum The new amount of required signatures
-	event QuorumUpdated(uint256 newQuorum);
-
-	/// @notice Emitted when a new transaction is executed
-	/// @param target The address the transaction was sent to
-	/// @param value The amount of ETH sent in the transaction
-	/// @param payload The data sent in the transaction
-	event Executed(address target, uint256 value, bytes payload);
-
-	/// @notice Emitted when a new signer gets added or removed from the trusted signers
-	/// @param signer The address of the updated signer
-	/// @param shouldTrust Wether the contract will trust this signer going forwards
-	event SignerUpdated(address indexed signer, bool shouldTrust);
+	/// @notice Emitted when a deposit is made
+  /// @param depositor The msg.sender
+  /// @dev The depositor must be an authority
+  event Deposit(address depositor);
 
   /// >>>>>>>>>>>>>>>>>>>>>  IMMUTABLES  <<<<<<<<<<<<<<<<<<<<<<< ///
 
 	/// @notice The Seal that manages this Coffer
 	address public immutable seal;
+
+  /// @notice The accepted coinage for the Coffer
+  address public immutable coinage;
+
+  /// >>>>>>>>>>>>>>>>>>>>>>>  STATE  <<<<<<<<<<<<<<<<<<<<<<<<<< ///
+
+	/// @notice User Balances
+  mapping(address => uint256) public balance;
+
+  /// @notice The total coinage balance
+  uint256 public coinBalance;
 
   /// >>>>>>>>>>>>>>>>>>>>>  CONSTRUCTOR  <<<<<<<<<<<<<<<<<<<<<< ///
 
@@ -47,12 +54,42 @@ contract Coffer is Auth {
   /// @dev Deployed from the Floe Factory
   /// @param seal_ The Seal that manages this contract
 	constructor(address seal_)
-    Auth(
+    QuorumAuthority(
       Auth(seal_).owner(),
       Auth(seal_).authority()
     )
   {}
 
-  /// @notice Can deposit to this contract
-  function 
+  /// >>>>>>>>>>>>>>>>>>>>>>>  CORKING  <<<<<<<<<<<<<<<<<<<<<<<< ///
+
+  /// @notice Deposits coinage into the Coffer
+  /// @dev Can only be called by an authority
+  /// @dev Reverts on ERC20 balance underflow
+  /// @param beneficiary The address to attribute the deposit
+  function cork(address calldata beneficiary) public external requiresAuth {
+    if (coinage == address(0)) balance[beneficiary] += msg.value;
+    else balance[beneficiary] += (IERC20(coinage).balanceOf(address(this)) - coinBalance);
+  }
+
+  /// @notice Withdraws coinage from the Coffer
+  /// @dev Can only be called by an authority
+  /// @param deductee The address to deduct the withdrawal
+  /// @param nibbles The amount of coinage to withdraw
+  function uncork(address calldata deductee, uint256 calldata nibbles) external requiresAuth {
+
+    // Remove from balance
+    balance[deductee] -= nibbles;
+
+    // Transfer to the deductee
+    if (coinage == address(0)) {
+      (bool sent, bytes memory data) = _to.call{value: nibbles}("");
+      if (!sent) revert JammedCork();
+    } else {
+      IERC20(coinage).safeTransferFrom(address(this), deductee, nibbles);
+    }
+
+    // Remove from the total coin balance
+    // Comes after to prevent corking reentry
+    coinBalance -= nibbles;
+  }
 }
