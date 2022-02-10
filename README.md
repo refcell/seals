@@ -1,6 +1,10 @@
-# foundry-starter  • [![tests](https://github.com/abigger87/foundry-starter/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/foundry-starter/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/foundry-starter/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/foundry-starter/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/foundry-starter) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/foundry-starter)
+# seals  • [![tests](https://github.com/abigger87/seals/actions/workflows/tests.yml/badge.svg)](https://github.com/abigger87/seals/actions/workflows/tests.yml) [![lints](https://github.com/abigger87/seals/actions/workflows/lints.yml/badge.svg)](https://github.com/abigger87/seals/actions/workflows/lints.yml) ![GitHub](https://img.shields.io/github/license/abigger87/seals) ![GitHub package.json version](https://img.shields.io/github/package-json/v/abigger87/seals)
 
-Backwards Compatible Template for Foundry and DappTools Projects 
+Sealed Commitment Auctions with Overcollateralized Bid Bands.
+
+## Architecture
+
+TODO
 
 ## Blueprint
 
@@ -12,60 +16,29 @@ lib
 ├─ clones-with-immutable-args — https://github.com/wighawag/clones-with-immutable-args
 src
 ├─ tests
-│  └─ Greeter.t — "Greeter Tests"
-└─ Greeter — "A Minimal Greeter Contract"
+│  └─ Seal.t — "Seal Tests"
+└─ Seal — "The Seal Coordination Contract"
 ```
 
 ## Development
 
-[foundry-starter](https://github.com/abigger87/foundry-starter) is intended to be minimal while also providing backwards compatibility. Thus, both [DappTools](https://dapp.tools/) and [Foundry](https://github.com/gaskonst/foundry) are supported. Installation instructions for both are included below.
-#### Install DappTools
+[seals](https://github.com/abigger87/seals) is built with [Foundry](https://github.com/gaskonst/foundry) but remains backwards compatible with [DappTools](https://dapp.tools/).
 
-Install DappTools using their [installation guide](https://github.com/dapphub/dapptools#installation).
+Set up your environment by following the instructions outlined in [abigger87/foundry-starter](https://github.com/abigger87/foundry-starter#development).
 
-#### First time with Forge/Foundry?
-
-See the official Foundry installation [instructions](https://github.com/gakonst/foundry/blob/master/README.md#installation).
-
-Don't have [rust](https://www.rust-lang.org/tools/install) installed?
-Run
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-Then, install the [foundry](https://github.com/gakonst/foundry) toolchain installer (`foundryup`) with:
-```bash
-curl -L https://foundry.paradigm.xyz | bash
-```
-
-Now that you've installed the `foundryup` binary,
-anytime you need to get the latest `forge` or `cast` binaries,
-you can run `foundryup`.
-
-So, simply execute:
-```bash
-foundryup
-```
-
-🎉 Foundry is installed! 🎉
-
-#### Setup
 
 ```bash
-make
-# OR #
+# Setup
 make setup
 ```
 
-#### Build
-
 ```bash
+# Build #
 make build
 ```
 
-#### Run Tests
-
 ```bash
+# Testing #
 make test
 ```
 
@@ -73,9 +46,26 @@ make test
 
 Using [foundry.toml](./foundry.toml), Foundry is easily configurable.
 
+## Install Seals as a Dependency
+
+To install with [DappTools](https://dapp.tools/), run:
+```sh
+dapp install abigger87/seals
+```
+
+To install with [Foundry](https://github.com/gakonst/foundry), run:
+```sh
+forge install abigger87/seals
+```
+
+To install with [Hardhat](https://hardhat.org/), run:
+```sh
+npm i -D seals
+```
+
 ## License
 
-[AGPL-3.0-only](https://github.com/abigger87/foundry-starter/blob/master/LICENSE)
+[AGPL-3.0-only](https://github.com/abigger87/seals/blob/master/LICENSE)
 
 # Acknowledgements
 
