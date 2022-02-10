@@ -16,8 +16,8 @@ contract Coffer is Auth {
 
 	/// @notice Deploys Coffer
   /// @dev Initiates the Auth Module with seal_ as the sole authority
+  /// @dev Deployed from the Floe Factory
   /// @param seal_ The Seal that manages this contract
-	/// @dev Deployed from the constructor of the LilJuicebox contract
 	constructor(address seal_)
     Auth(
       Auth(seal_).owner(),
