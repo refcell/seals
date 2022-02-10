@@ -9,6 +9,6 @@ contract SealTest is DSTestPlus {
     Seal seal;
 
     function setUp() public {
-        seal = new Seal(;
+        seal = new Seal();
     }
 }
