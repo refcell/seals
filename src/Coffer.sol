@@ -9,7 +9,6 @@ import {Auth} from "@solmate/auth/Auth.sol";
 /// @title Coffer
 /// @notice A Lockbox Contract that stores auction collaterals
 /// @dev Uses Auth patterns as demonstrated in https://github.com/Rari-Capital/vaults/blob/main/src/Vault.sol
-/// @dev Adapted from Lil Gnosis in https://github.com/m1guelpf/lil-web3
 /// @author Andreas Bigger <andreas@nascent.xyz>
 contract Coffer is QuorumAuthority {
 
@@ -92,4 +91,7 @@ contract Coffer is QuorumAuthority {
     // Comes after to prevent corking reentry
     coinBalance -= nibbles;
   }
+
+  /// >>>>>  AUTHORITY INHERITED THROUGH QUORUMAUTHORITY  <<<<<< ///
+
 }

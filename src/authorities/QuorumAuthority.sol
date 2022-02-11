@@ -5,6 +5,8 @@ import {Auth, Authority} from "@solmate/auth/Auth.sol";
 
 /// @title QuorumAuthority
 /// @notice Succinct Quorum Authority
+/// @dev Adapted Authority Pattern from https://github.com/Rari-Capital/solmate/blob/main/src/auth/authorities/MultiRolesAuthority.sol
+/// @dev Adapted from Lil Gnosis in https://github.com/m1guelpf/lil-web3
 /// @author Andreas Bigger <andreas@nascent.xyz>
 contract QuorumAuthority is Auth, Authority {
 
@@ -70,122 +72,155 @@ contract QuorumAuthority is Auth, Authority {
 
   /// >>>>>>>>>>>>>>>>>>>>>  CONSTRUCTOR  <<<<<<<<<<<<<<<<<<<<<< ///
 
+	/// @notice Instantiates a Quorum Authority, with the specified name, trusted signers and number of required signatures
+	/// @param name The name of the multisig
+	/// @param signers An array of addresses to trust
+	/// @param _quorum The number of required signatures to execute a transaction or change the state
+	constructor(
+		string memory name,
+		address[] memory signers,
+		uint256 _quorum,
+    address _owner,
+    Authority _authority
+	) payable Auth(_owner, _authority) {
+		unchecked {
+			for (uint256 i = 0; i < signers.length; i++) isSigner[signers[i]] = true;
+		}
+
+		quorum = _quorum;
+
+		domainSeparator = keccak256(
+			abi.encode(
+				keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
+				keccak256(bytes(name)),
+				keccak256(bytes('1')),
+				block.chainid,
+				address(this)
+			)
+		);
+	}
+
+  /// @notice Update the amount of required signatures to execute a transaction or change state, providing the required amount of signatures
+	/// @param _quorum The new number of required signatures
+	/// @param sigs An array of signatures from trusted signers, sorted in ascending order by the signer's addresses
+	/// @dev Make sure the signatures are sorted in ascending order by the signer's addresses! Otherwise the verification will fail
+	function setQuorum(uint256 _quorum, Signature[] calldata sigs) public payable {
+		bytes32 digest = keccak256(
+			abi.encodePacked('\x19\x01', domainSeparator, keccak256(abi.encode(QUORUM_HASH, _quorum, nonce++)))
+		);
+
+		address previous;
+
+		unchecked {
+			for (uint256 i = 0; i < quorum; i++) {
+				address sigAddress = ecrecover(digest, sigs[i].v, sigs[i].r, sigs[i].s);
+
+				if (!isSigner[sigAddress] || previous >= sigAddress) revert InvalidSignatures();
+
+				previous = sigAddress;
+			}
+		}
+
+		emit QuorumUpdated(_quorum);
+
+		quorum = _quorum;
+	}
+
+	/// @notice Add or remove an address from the list of signers trusted by this contract
+	/// @param signer The address of the signer
+	/// @param shouldTrust Wether to trust this signer going forward
+	/// @param sigs An array of signatures from trusted signers, sorted in ascending order by the signer's addresses
+	/// @dev Make sure the signatures are sorted in ascending order by the signer's addresses! Otherwise the verification will fail
+	function setSigner(
+		address signer,
+		bool shouldTrust,
+		Signature[] calldata sigs
+	) public payable {
+		bytes32 digest = keccak256(
+			abi.encodePacked(
+				'\x19\x01',
+				domainSeparator,
+				keccak256(abi.encode(SIGNER_HASH, signer, shouldTrust, nonce++))
+			)
+		);
+
+		address previous;
+
+		unchecked {
+			for (uint256 i = 0; i < quorum; i++) {
+				address sigAddress = ecrecover(digest, sigs[i].v, sigs[i].r, sigs[i].s);
+
+				if (!isSigner[sigAddress] || previous >= sigAddress) revert InvalidSignatures();
+
+				previous = sigAddress;
+			}
+		}
+
+		emit SignerUpdated(signer, shouldTrust);
+
+		isSigner[signer] = shouldTrust;
+	}
 
 
+	/// @notice Execute a transaction from the multisig, providing the required amount of signatures
+	/// @param target The address to send the transaction to
+	/// @param value The amount of ETH to send in the transaction
+	/// @param payload The data to send in the transaction
+	/// @param sigs An array of signatures from trusted signers, sorted in ascending order by the signer's addresses
+	/// @dev Make sure the signatures are sorted in ascending order by the signer's addresses! Otherwise the verification will fail
+	function execute(
+		address target,
+		uint256 value,
+		bytes calldata payload,
+		Signature[] calldata sigs
+	) public payable {
+		bytes32 digest = keccak256(
+			abi.encodePacked(
+				'\x19\x01',
+				domainSeparator,
+				keccak256(abi.encode(EXECUTE_HASH, target, value, payload, nonce++))
+			)
+		);
 
+		address previous;
 
-    /*///////////////////////////////////////////////////////////////
-                                  EVENTS
-    //////////////////////////////////////////////////////////////*/
+		unchecked {
+			for (uint256 i = 0; i < quorum; i++) {
+				address sigAddress = ecrecover(digest, sigs[i].v, sigs[i].r, sigs[i].s);
 
-    event UserRoleUpdated(address indexed user, uint8 indexed role, bool enabled);
+				if (!isSigner[sigAddress] || previous >= sigAddress) revert InvalidSignatures();
 
-    event PublicCapabilityUpdated(bytes4 indexed functionSig, bool enabled);
+				previous = sigAddress;
+			}
+		}
 
-    event RoleCapabilityUpdated(uint8 indexed role, bytes4 indexed functionSig, bool enabled);
+		emit Executed(target, value, payload);
 
-    event TargetCustomAuthorityUpdated(address indexed target, Authority indexed authority);
+		(bool success, ) = target.call{ value: value }(payload);
 
-    /*///////////////////////////////////////////////////////////////
-                               CONSTRUCTOR
-    //////////////////////////////////////////////////////////////*/
+		if (!success) revert ExecutionFailed();
+	}
 
-    constructor(address _owner, Authority _authority) Auth(_owner, _authority) {}
+  /// >>>>>>>>>>>>>>>>>>>>>>  ATUH LOGIC  <<<<<<<<<<<<<<<<<<<<<< ///
 
-    /*///////////////////////////////////////////////////////////////
-                       CUSTOM TARGET AUTHORITY STORAGE
-    //////////////////////////////////////////////////////////////*/
+  /// @notice Checks if the quorum has been reached for a call
+  function canCall(
+      address user,
+      address target,
+      bytes4 functionSig
+  ) public view virtual override returns (bool) {
+      Authority customAuthority = getTargetCustomAuthority[target];
 
-    mapping(address => Authority) public getTargetCustomAuthority;
+      if (address(customAuthority) != address(0)) return customAuthority.canCall(user, target, functionSig);
 
-    /*///////////////////////////////////////////////////////////////
-                            ROLE/USER STORAGE
-    //////////////////////////////////////////////////////////////*/
+      return
+          isCapabilityPublic[functionSig] || bytes32(0) != getUserRoles[user] & getRolesWithCapability[functionSig];
+  }
 
-    mapping(address => bytes32) public getUserRoles;
+  /// >>>>>>>>>>>>>>>>>>>>>>>  FALLBACK  <<<<<<<<<<<<<<<<<<<<<<< ///
 
-    mapping(bytes4 => bool) public isCapabilityPublic;
+  /// @notice Allows The Quorum Authority to receive native ether
+	/// @dev Fallback for empty calls with msg value
+	receive() external payable {}
 
-    mapping(bytes4 => bytes32) public getRolesWithCapability;
-
-    function doesUserHaveRole(address user, uint8 role) public view virtual returns (bool) {
-        return (uint256(getUserRoles[user]) >> role) & 1 != 0;
-    }
-
-    function doesRoleHaveCapability(uint8 role, bytes4 functionSig) public view virtual returns (bool) {
-        return (uint256(getRolesWithCapability[functionSig]) >> role) & 1 != 0;
-    }
-
-    /*///////////////////////////////////////////////////////////////
-                          AUTHORIZATION LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function canCall(
-        address user,
-        address target,
-        bytes4 functionSig
-    ) public view virtual override returns (bool) {
-        Authority customAuthority = getTargetCustomAuthority[target];
-
-        if (address(customAuthority) != address(0)) return customAuthority.canCall(user, target, functionSig);
-
-        return
-            isCapabilityPublic[functionSig] || bytes32(0) != getUserRoles[user] & getRolesWithCapability[functionSig];
-    }
-
-    /*///////////////////////////////////////////////////////////////
-               CUSTOM TARGET AUTHORITY CONFIGURATION LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function setTargetCustomAuthority(address target, Authority customAuthority) public virtual requiresAuth {
-        getTargetCustomAuthority[target] = customAuthority;
-
-        emit TargetCustomAuthorityUpdated(target, customAuthority);
-    }
-
-    /*///////////////////////////////////////////////////////////////
-                  PUBLIC CAPABILITY CONFIGURATION LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function setPublicCapability(bytes4 functionSig, bool enabled) public virtual requiresAuth {
-        isCapabilityPublic[functionSig] = enabled;
-
-        emit PublicCapabilityUpdated(functionSig, enabled);
-    }
-
-    /*///////////////////////////////////////////////////////////////
-                      USER ROLE ASSIGNMENT LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function setUserRole(
-        address user,
-        uint8 role,
-        bool enabled
-    ) public virtual requiresAuth {
-        if (enabled) {
-            getUserRoles[user] |= bytes32(1 << role);
-        } else {
-            getUserRoles[user] &= ~bytes32(1 << role);
-        }
-
-        emit UserRoleUpdated(user, role, enabled);
-    }
-
-    /*///////////////////////////////////////////////////////////////
-                  ROLE CAPABILITY CONFIGURATION LOGIC
-    //////////////////////////////////////////////////////////////*/
-
-    function setRoleCapability(
-        uint8 role,
-        bytes4 functionSig,
-        bool enabled
-    ) public virtual requiresAuth {
-        if (enabled) {
-            getRolesWithCapability[functionSig] |= bytes32(1 << role);
-        } else {
-            getRolesWithCapability[functionSig] &= ~bytes32(1 << role);
-        }
-
-        emit RoleCapabilityUpdated(role, functionSig, enabled);
-    }
 }
