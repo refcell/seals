@@ -8,10 +8,10 @@ Sealed Commitment Auctions with Overcollateralized Bid Bands.
 
 Each Sealed Commitment Auction is created using [wighawag](https://twitter.com/wighawag) and [ZeframLou's](https://twitter.com/boredGenius) [Clones With Immutable Args](https://github.com/wighawag/clones-with-immutable-args) factory pattern.
 
-The factory contract is called `Floe` - a floating sheet of ice where `Seals` are spawned,
+The factory contract is called `Floe` - a floating sheet of ice where Seals are spawned,
 
 `Floe` deploys three contracts per auction:
-1. [Seal](./src/Seal.sol) - The Sealed Auction Manager Contract.
+1. [Bloc](./src/Bloc.sol) - The Sealed Auction Manager Contract.
 2. [Nibs](./src/Nibs.sol) - The Project Shares issued once the reveal session ends.
 3. [Coffer](./src/Coffer.sol) - A Lockbox Contract that stores auction collaterals.
 

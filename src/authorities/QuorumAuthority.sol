@@ -56,6 +56,10 @@ contract QuorumAuthority is Auth, Authority {
 	/// @dev This automatically generates a getter for us!
 	mapping(address => bool) public isSigner;
 
+  /// @notice Maps Permits
+  /// @dev target address => bytes4 functionSig => uint256 quorum
+  mapping(address => mapping(bytes4 => uint256)) public permitted;
+
   /// >>>>>>>>>>>>>>>>>>>>>  IMMUTABLES  <<<<<<<<<<<<<<<<<<<<<<< ///
 
 	/// @dev The EIP-712 domain separator
@@ -69,6 +73,9 @@ contract QuorumAuthority is Auth, Authority {
 
 	/// @dev EIP-712 types for a signature that executes a transaction
 	bytes32 public constant EXECUTE_HASH = keccak256('Execute(address target,uint256 value,bytes payload,uint256 nonce)');
+
+  /// @dev EIP-712 types for a signature that permits a call
+  bytes32 public constant PERMIT_HASH = keccak('Permit(address target,bytes4 functionSig,uint256 cachedNonce)');
 
   /// >>>>>>>>>>>>>>>>>>>>>  CONSTRUCTOR  <<<<<<<<<<<<<<<<<<<<<< ///
 
@@ -203,18 +210,41 @@ contract QuorumAuthority is Auth, Authority {
 
   /// >>>>>>>>>>>>>>>>>>>>>>  ATUH LOGIC  <<<<<<<<<<<<<<<<<<<<<< ///
 
-  /// @notice Checks if the quorum has been reached for a call
+	/// @notice Permits a call on behalf of the msg.sender
+	/// @param target The address to send the transaction to
+	/// @param functionSig The amount of ETH to send in the transaction
+	/// @param sig A signature from the trusted signer
+	function permit(
+		address calldata target,
+		bytes4 calldata functionSig,
+    uint256 calldata cachedNonce,
+		Signature calldata sig
+	) public payable {
+		bytes32 digest = keccak256(
+			abi.encodePacked(
+				'\x19\x01',
+				domainSeparator,
+				keccak256(abi.encode(PERMIT_HASH, target, functionSig, cachedNonce))
+			)
+		);
+
+    // Validate Signer
+		address sigAddress = ecrecover(digest, sig.v, sig.r, sig.s);
+    if (!isSigner[sigAddress]) revert InvalidSignatures();
+
+    // Permit call
+    permitted[target][functionSig] += 1;
+
+		emit Permit(target, functionSig, cachedNonce);
+	}
+
+  /// @notice Returns if the quorum permitted the call
   function canCall(
       address user,
       address target,
       bytes4 functionSig
   ) public view virtual override returns (bool) {
-      Authority customAuthority = getTargetCustomAuthority[target];
-
-      if (address(customAuthority) != address(0)) return customAuthority.canCall(user, target, functionSig);
-
-      return
-          isCapabilityPublic[functionSig] || bytes32(0) != getUserRoles[user] & getRolesWithCapability[functionSig];
+      return permitted[target][functionSig] >= quorum;
   }
 
   /// >>>>>>>>>>>>>>>>>>>>>>>  FALLBACK  <<<<<<<<<<<<<<<<<<<<<<< ///

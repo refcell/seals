@@ -3,12 +3,12 @@ pragma solidity 0.8.11;
 
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
 
-import {Seal} from "../Seal.sol";
+import {Bloc} from "../Bloc.sol";
 
-contract SealTest is DSTestPlus {
-    Seal seal;
+contract BlocTest is DSTestPlus {
+    Bloc bloc;
 
     function setUp() public {
-        seal = new Seal();
+        bloc = new Bloc();
     }
 }

@@ -63,6 +63,7 @@ contract Coffer is QuorumAuthority {
 
   /// @notice Deposits coinage into the Coffer
   /// @dev Can only be called by an authority
+  /// @dev Can always be called by seal since it is the owner
   /// @dev Reverts on ERC20 balance underflow
   /// @param beneficiary The address to attribute the deposit
   function cork(address calldata beneficiary) public external requiresAuth {
