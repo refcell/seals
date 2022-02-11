@@ -8,43 +8,10 @@ import {ClonesWithImmutableArgs} from "@clones/ClonesWithImmutableArgs.sol";
 
 import {IERC721} from "./interfaces/IERC721.sol";
 
-// Clone Imports
-import {Seal} from "./Seal.sol";
-// import {Nibs} from "./Nibs.sol";
-// import {Coffer} from "./Coffer.sol";
-
-/// >>>>>>>>>>>>>>>>>>>>  CUSTOM ERRORS  <<<<<<<<<<<<<<<<<<<<< ///
-
-/// Duplicate Session
-/// @param sender The message sender
-/// @param token The address of the ERC721 Token
-error DuplicateSession(address sender, address token);
-
-/// Not Approved
-/// The sender is not approved to create the session for the given ERC721 token
-/// @param sender The message sender
-/// @param approved The address of the approved creator
-/// @param token The address of the ERC721 Token
-error NotApproved(address sender, address approved, address token);
-
-/// Bad Session Bounds
-/// @param allocationStart The session's allocation period start
-/// @param allocationEnd The session's allocation period end
-/// @param mintingStart The session's minting period start
-/// @param mintingEnd The session's minting period end
-error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mintingStart, uint64 mintingEnd);
-
-/// Require the ERC721 tokens to already be transferred to the twam contract
-/// Enables permissionless session creation
-/// @param balanceOfThis The ERC721 balance of the twam contract
-/// @param maxMintingAmount The maxmum number of ERC721s to mint
-error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount);
-
-/// Session Overwrite
-error SessionOverwrite();
-
-/// Sender is not owner
-error SenderNotOwner();
+// Clone Implementation Imports
+import {Bloc} from "./Bloc.sol";
+import {Nibs} from "./Nibs.sol";
+import {Coffer} from "./Coffer.sol";
 
 /// >>>>>>>>>>>>>>>>>>>>>>>>>  FLOE  <<<<<<<<<<<<<<<<<<<<<<<<< ///
 
@@ -53,12 +20,50 @@ error SenderNotOwner();
 /// @author Andreas Bigger <andreas@nascent.xyz>
 /// @dev Adapted from https://github.com/ZeframLou/vested-erc20/blob/main/src/VestedERC20Factory.sol
 contract Floe is ERC721TokenReceiver {
+
   /// @dev Use CloneWithCallData library for cheap deployment
   /// @dev Uses a modified minimal proxy pattern
   using ClonesWithImmutableArgs for address;
 
+  /// >>>>>>>>>>>>>>>>>>>>  CUSTOM ERRORS  <<<<<<<<<<<<<<<<<<<<< ///
+
+  /// Duplicate Seal
+  /// @param sender The message sender
+  /// @param token The address of the ERC721 Token
+  error DuplicateSeal(address sender, address token);
+
+  /// Not Approved
+  /// The sender is not approved to create the session for the given ERC721 token
+  /// @param sender The message sender
+  /// @param approved The address of the approved creator
+  /// @param token The address of the ERC721 Token
+  error NotApproved(address sender, address approved, address token);
+
+  /// Bad Session Bounds
+  /// @param allocationStart The session's allocation period start
+  /// @param allocationEnd The session's allocation period end
+  /// @param mintingStart The session's minting period start
+  /// @param mintingEnd The session's minting period end
+  error BadSessionBounds(uint64 allocationStart, uint64 allocationEnd, uint64 mintingStart, uint64 mintingEnd);
+
+  /// Require the ERC721 tokens to already be transferred to the twam contract
+  /// Enables permissionless session creation
+  /// @param balanceOfThis The ERC721 balance of the twam contract
+  /// @param maxMintingAmount The maxmum number of ERC721s to mint
+  error RequireMintedERC721Tokens(uint256 balanceOfThis, uint256 maxMintingAmount);
+
+  /// Session Overwrite
+  error SessionOverwrite();
+
+  /// Sender is not owner
+  error SenderNotOwner();
+
+  /// >>>>>>>>>>>>>>>>>>>>  CUSTOM EVENTS  <<<<<<<<<<<<<<<<<<<<< ///
+
   /// @dev Emit a creation event to track twams
   event TwamDeployed(TwamBase twam);
+
+  /// >>>>>>>>>>>>>>>>>>>>>>>  STATE  <<<<<<<<<<<<<<<<<<<<<<<<<< ///
 
   /// @notice The TwamBase implementation
   TwamBase public immutable implementation;
@@ -78,13 +83,17 @@ contract Floe is ERC721TokenReceiver {
   /// @dev initialized to 1 for cheaper initial loads
   uint256 public sessionId = 1;
 
+  /// >>>>>>>>>>>>>>>>>>>>>  CONSTRUCTOR  <<<<<<<<<<<<<<<<<<<<<< ///
+
   /// @notice Creates the Factory with the given TwamBase implementation
   /// @param implementation_ The TwamBase implementation
   constructor(TwamBase implementation_) {
     implementation = implementation_;
   }
 
-  /// @notice Creates a TWAM
+  /// >>>>>>>>>>>>>>>>>>>>  CREATION LOGIC  <<<<<<<<<<<<<<<<<<<< ///
+
+  /// @notice Creates a Seal - {Bloc, Coffer, Nibs}
   /// @param token The ERC721 Token
   /// @param coordinator The session coordinator who controls the session
   /// @param allocationStart When the allocation period begins
@@ -95,7 +104,7 @@ contract Floe is ERC721TokenReceiver {
   /// @param depositToken The token to pay for minting
   /// @param maxMintingAmount The maximum amount of tokens to mint (must be minted to this contract)
   /// @param rolloverOption What happens when the minting period ends and the session is over; one of {1, 2, 3}
-  function createTwam(
+  function spawn(
     address token,
     address coordinator,
     uint64 allocationStart,
@@ -106,7 +115,11 @@ contract Floe is ERC721TokenReceiver {
     address depositToken,
     uint256 maxMintingAmount,
     uint8 rolloverOption
-  ) external returns (TwamBase twamBase) {
+  ) external returns (
+    Bloc bloc,
+    Coffer coffer,
+    Nibs nibs
+  ) {
     // Prevent Overwriting Sessions
     if (createdTwams[token] != address(0) || token == address(0)) {
       revert DuplicateSession(msg.sender, token);
@@ -162,30 +175,4 @@ contract Floe is ERC721TokenReceiver {
     sessions[sessionId] = address(twamBase);
     sessionId += 1;
   }
-
-  /// @notice TwamFactory receives ERC721 tokens to allow permissionless session creation
-  function onERC721Received(
-        address _operator,
-        address _from,
-        uint256 _id,
-        bytes calldata _data
-    ) public virtual override returns (bytes4) {
-      address token = abi.decode(_data, (address));
-
-      // Make sure there isn't already an approved creator
-      if (approvedCreator[token] != address(0)) {
-        revert SessionOverwrite();
-      }
-
-      // Verify this token is being transferred by checking the balance of _from
-      if (IERC721(token).ownerOf(_id) != address(this)) {
-        revert SenderNotOwner();
-      }
-
-      // Approve the sender as the session creator for 
-      approvedCreator[token] = _from;
-
-      // Finally, return the selector to complete the transfer
-      return ERC721TokenReceiver.onERC721Received.selector;
-    }
 }
