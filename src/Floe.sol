@@ -3,10 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity 0.8.11;
 
-import {ERC721TokenReceiver} from "@solmate/tokens/ERC721.sol";
 import {ClonesWithImmutableArgs} from "@clones/ClonesWithImmutableArgs.sol";
-
-import {IERC721} from "./interfaces/IERC721.sol";
 
 // Clone Implementation Imports
 import {Bloc} from "./Bloc.sol";
@@ -19,7 +16,7 @@ import {Coffer} from "./Coffer.sol";
 /// @notice A floating sheet of ice where seals are spawned
 /// @author Andreas Bigger <andreas@nascent.xyz>
 /// @dev Adapted from https://github.com/ZeframLou/vested-erc20/blob/main/src/VestedERC20Factory.sol
-contract Floe is ERC721TokenReceiver {
+contract Floe {
 
   /// @dev Use CloneWithCallData library for cheap deployment
   /// @dev Uses a modified minimal proxy pattern
@@ -61,12 +58,18 @@ contract Floe is ERC721TokenReceiver {
   /// >>>>>>>>>>>>>>>>>>>>  CUSTOM EVENTS  <<<<<<<<<<<<<<<<<<<<< ///
 
   /// @dev Emit a creation event to track twams
-  event TwamDeployed(TwamBase twam);
+  event SealDeployed(uint256 id);
 
   /// >>>>>>>>>>>>>>>>>>>>>>>  STATE  <<<<<<<<<<<<<<<<<<<<<<<<<< ///
 
-  /// @notice The TwamBase implementation
-  TwamBase public immutable implementation;
+  /// @notice The bloc base implementation
+  Bloc public immutable bloc;
+
+  /// @notice The nibs base implementation
+  Nibs public immutable nibs;
+
+  /// @notice The coffer base implementation
+  Coffer public immutable coffer;
 
   /// @dev Only addresses that have transferred the erc721 tokens to this address can create a session
   /// @dev Maps ERC721 => user
@@ -85,10 +88,18 @@ contract Floe is ERC721TokenReceiver {
 
   /// >>>>>>>>>>>>>>>>>>>>>  CONSTRUCTOR  <<<<<<<<<<<<<<<<<<<<<< ///
 
-  /// @notice Creates the Factory with the given TwamBase implementation
-  /// @param implementation_ The TwamBase implementation
-  constructor(TwamBase implementation_) {
-    implementation = implementation_;
+  /// @notice Creates the Factory with the clone modules
+  /// @param bloc_ The bloc base implementation
+  /// @param nibs_ The nibs base implementation
+  /// @param coffer_ The coffer base implementation
+  constructor(
+    Bloc bloc_,
+    Nibs nibs_,
+    Coffer coffer_
+  ) {
+    bloc = bloc_;
+    nibs = nibs_;
+    coffer = coffer_;
   }
 
   /// >>>>>>>>>>>>>>>>>>>>  CREATION LOGIC  <<<<<<<<<<<<<<<<<<<< ///
@@ -120,59 +131,59 @@ contract Floe is ERC721TokenReceiver {
     Coffer coffer,
     Nibs nibs
   ) {
-    // Prevent Overwriting Sessions
-    if (createdTwams[token] != address(0) || token == address(0)) {
-      revert DuplicateSession(msg.sender, token);
-    }
+    // // Prevent Overwriting Sessions
+    // if (createdTwams[token] != address(0) || token == address(0)) {
+    //   revert DuplicateSession(msg.sender, token);
+    // }
 
-    // For Permissionless Session Creation
-    // We check that the sender is the approvedCreator
-    if (approvedCreator[token] != msg.sender) {
-      revert NotApproved(msg.sender, approvedCreator[token], token);
-    }
+    // // For Permissionless Session Creation
+    // // We check that the sender is the approvedCreator
+    // if (approvedCreator[token] != msg.sender) {
+    //   revert NotApproved(msg.sender, approvedCreator[token], token);
+    // }
 
-    // We also have to make sure this address has a sufficient balance of ERC721 tokens for the session
-    // This can be done by setting the ERC721.balanceOf(address(TwamFactory)) to the maxMintingAmount on ERC721 contract deployment
-    uint256 balanceOfThis = IERC721(token).balanceOf(address(this));
-    if (balanceOfThis < maxMintingAmount) revert RequireMintedERC721Tokens(balanceOfThis, maxMintingAmount);
+    // // We also have to make sure this address has a sufficient balance of ERC721 tokens for the session
+    // // This can be done by setting the ERC721.balanceOf(address(TwamFactory)) to the maxMintingAmount on ERC721 contract deployment
+    // uint256 balanceOfThis = IERC721(token).balanceOf(address(this));
+    // if (balanceOfThis < maxMintingAmount) revert RequireMintedERC721Tokens(balanceOfThis, maxMintingAmount);
 
-    // Validate Session Bounds
-    if (
-      allocationStart > allocationEnd
-      || mintingStart > mintingEnd
-      || mintingStart < allocationEnd
-    ) {
-      revert BadSessionBounds(allocationStart, allocationEnd, mintingStart, mintingEnd);
-    }
+    // // Validate Session Bounds
+    // if (
+    //   allocationStart > allocationEnd
+    //   || mintingStart > mintingEnd
+    //   || mintingStart < allocationEnd
+    // ) {
+    //   revert BadSessionBounds(allocationStart, allocationEnd, mintingStart, mintingEnd);
+    // }
 
-    // We can abi encodePacked instead of manually packing
-    bytes memory data = abi.encodePacked(
-      token,
-      coordinator,
-      allocationStart,
-      allocationEnd,
-      mintingStart,
-      mintingEnd,
-      minPrice,
-      maxMintingAmount,
-      depositToken,
-      rolloverOption,
-      sessionId,
-      address(this)
-    );
+    // // We can abi encodePacked instead of manually packing
+    // bytes memory data = abi.encodePacked(
+    //   token,
+    //   coordinator,
+    //   allocationStart,
+    //   allocationEnd,
+    //   mintingStart,
+    //   mintingEnd,
+    //   minPrice,
+    //   maxMintingAmount,
+    //   depositToken,
+    //   rolloverOption,
+    //   sessionId,
+    //   address(this)
+    // );
 
-    // Create the TWAM
-    twamBase = TwamBase(
-        address(implementation).clone(data)
-    );
-    emit TwamDeployed(twamBase);
+    // // Create the TWAM
+    // twamBase = TwamBase(
+    //     address(implementation).clone(data)
+    // );
+    // emit TwamDeployed(twamBase);
 
-    // Set approval for all the ERC721 Tokens
-    IERC721(token).setApprovalForAll(address(twamBase), true);
+    // // Set approval for all the ERC721 Tokens
+    // IERC721(token).setApprovalForAll(address(twamBase), true);
 
-    // Record Creation
-    createdTwams[token] = address(twamBase);
-    sessions[sessionId] = address(twamBase);
-    sessionId += 1;
+    // // Record Creation
+    // createdTwams[token] = address(twamBase);
+    // sessions[sessionId] = address(twamBase);
+    // sessionId += 1;
   }
 }

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.10;
+pragma solidity 0.8.11;
 
 import {Auth, Authority} from "@solmate/auth/Auth.sol";
 
@@ -34,6 +34,12 @@ contract QuorumAuthority is Auth, Authority {
 	/// @param signer The address of the updated signer
 	/// @param shouldTrust Wether the contract will trust this signer going forwards
 	event SignerUpdated(address indexed signer, bool shouldTrust);
+
+  /// @notice Emitted when a permit is made
+  /// @param target The target contract
+  /// @param functionSig The function signature
+  /// @param cachedNonce The frozen nonce value at the time of permit
+  event Permit(address target, bytes4 functionSig, uint256 cachedNonce);
 
   /// >>>>>>>>>>>>>>>>>>>>>>>  STATE  <<<<<<<<<<<<<<<<<<<<<<<<<< ///
 
@@ -75,7 +81,7 @@ contract QuorumAuthority is Auth, Authority {
 	bytes32 public constant EXECUTE_HASH = keccak256('Execute(address target,uint256 value,bytes payload,uint256 nonce)');
 
   /// @dev EIP-712 types for a signature that permits a call
-  bytes32 public constant PERMIT_HASH = keccak('Permit(address target,bytes4 functionSig,uint256 cachedNonce)');
+  bytes32 public constant PERMIT_HASH = keccak256('Permit(address target,bytes4 functionSig,uint256 cachedNonce)');
 
   /// >>>>>>>>>>>>>>>>>>>>>  CONSTRUCTOR  <<<<<<<<<<<<<<<<<<<<<< ///
 
@@ -215,9 +221,9 @@ contract QuorumAuthority is Auth, Authority {
 	/// @param functionSig The amount of ETH to send in the transaction
 	/// @param sig A signature from the trusted signer
 	function permit(
-		address calldata target,
-		bytes4 calldata functionSig,
-    uint256 calldata cachedNonce,
+		address target,
+		bytes4 functionSig,
+    uint256 cachedNonce,
 		Signature calldata sig
 	) public payable {
 		bytes32 digest = keccak256(

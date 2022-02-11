@@ -3,6 +3,7 @@ pragma solidity 0.8.11;
 
 import {DSTestPlus} from "./utils/DSTestPlus.sol";
 
+import {Bloc} from "../Bloc.sol";
 import {Nibs} from "../Nibs.sol";
 
 contract NibsTest is DSTestPlus {
@@ -29,8 +30,8 @@ contract NibsTest is DSTestPlus {
       );
 
       // Validate Metadata
-      assert(nibs.name() == NIBS_NAME);
-      assert(nibs.symbol() == NIBS_SYMBOL);
+      assert(keccak256(abi.encodePacked(nibs.name())) == keccak256(abi.encodePacked(NIBS_NAME)));
+      assert(keccak256(abi.encodePacked(nibs.symbol())) == keccak256(abi.encodePacked(NIBS_SYMBOL)));
   }
 
   /// >>>>>>>>>>>>>>>>>>  MINTING & BURNING  <<<<<<<<<<<<<<<<<<< ///
