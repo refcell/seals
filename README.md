@@ -2,6 +2,20 @@
 
 Sealed Commitment Auctions with Overcollateralized Bid Bands.
 
+```m
+        .---.
+       /o   o\
+    __(=  "  =)__
+     //\'-=-'/\\
+        )   (_
+       /      `"=-._
+      /       \     ``"=.
+     /  /   \  \         `=..--.
+ ___/  /     \  \___      _,  , `\
+`-----' `""""`'-----``"""`  \  \_/
+                             `-`
+```
+
 ## Overview
 
 `Seals` is a ***highly*** modular, unconventially named Protocol to run Sealed Auctions using Commitment Schemes.
