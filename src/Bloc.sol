@@ -74,8 +74,11 @@ contract Bloc is Auth {
   /// @notice User Commitments
   mapping(address => bytes32) public commits;
 
-  /// @notice The resulting user appraisals
-  mapping(address => uint256) public reveals;
+  /// @notice A participant's revealed lower band
+  mapping(address => uint256) public lreveals;
+
+  /// @notice A participant's revealed high band
+  mapping(address => uint256) public hreveals;
 
   /// @notice Maps if a member accepted project shares
   mapping(address => uint256) public fellows;
@@ -95,10 +98,10 @@ contract Bloc is Auth {
   function commit(bytes32 commitment) external payable {
       // Make sure the user has placed the deposit amount
       if (depositToken == address(0) && msg.value < depositAmount) revert InsufficientDeposit();
-      
+
       // Verify during commit phase
       if (block.timestamp < commitStart || block.timestamp >= revealStart) revert WrongPhase();
-      
+
       // Transfer the deposit token into this contract
       if (depositToken != address(0)) {
         IERC20(depositToken).transferFrom(msg.sender, address(this), depositAmount);
@@ -112,44 +115,52 @@ contract Bloc is Auth {
   }
 
   /// @notice Revealing a commitment
-  function reveal(uint256 appraisal, bytes32 blindingFactor) external {
-      // Verify during reveal+mint phase
-      if (block.timestamp < revealStart || block.timestamp >= restrictedMintStart) revert WrongPhase();
+  function reveal(
+    uint256 low,
+    uint256 high,
+    bytes32 blind
+  ) external {
+    // Optimized MSTORE timestamp use 
+    uint256 time = block.timestamp;
 
-      bytes32 senderCommit = commits[msg.sender];
+    // Verify during the reveal phase
+    if (time < reveal || time >= arbitration) revert WrongPhase();
 
-      bytes32 calculatedCommit = keccak256(abi.encodePacked(msg.sender, appraisal, blindingFactor));
+    // Optimized Commit SLOAD 
+    bytes32 senderCommit = commits[msg.sender];
 
-      if (senderCommit != calculatedCommit) revert InvalidHash();
+    // rehash the commitment
+    bytes32 calculatedCommit = keccak256(abi.encodePacked(msg.sender, low, high, blind));
 
-      // The user has revealed their correct value
-      delete commits[msg.sender];
-      reveals[msg.sender] = appraisal;
+    // Validate commitment
+    // Prevent's double reveals by reverting zero commitments
+    if (senderCommit == bytes32(0) || senderCommit != calculatedCommit) revert InvalidHash();
 
-      // Add the appraisal to the result value and recalculate variance
-      // Calculation adapted from https://math.stackexchange.com/questions/102978/incremental-computation-of-standard-deviation
-      if (count == 0) {
-        clearingPrice = appraisal;
-      } else {
-        uint256 clearingPrice_ = clearingPrice;
-        uint256 newClearingPrice = (count * clearingPrice_ + appraisal) / (count + 1);
+    // The user has revealed their correct value
+    delete commits[msg.sender];
+    lreveals[msg.sender] = low;
+    hreveals[msg.sender] = high;
 
-        uint256 carryTerm = count * rollingVariance;
-        uint256 clearingDiff = clearingPrice_ > newClearingPrice ?  clearingPrice_ - newClearingPrice : newClearingPrice - clearingPrice_;
-        uint256 deviationUpdate = count * (clearingDiff ** 2);
-        uint256 meanUpdate = appraisal < newClearingPrice ? newClearingPrice - appraisal : appraisal - newClearingPrice;
-        uint256 updateTerm = meanUpdate ** 2;
-        rollingVariance = (deviationUpdate + carryTerm + updateTerm) / (count + 1);
-
-        // Update clearingPrice_ (new mean)
-        clearingPrice = newClearingPrice;
-      }
-      unchecked {
-        count += 1;
-      }
-
-      // Emit a Reveal Event
-      emit Reveal(msg.sender, appraisal);
+    // "Humanity will be a Type III civilization before this overflows" - andreas
+    // h/t 0xsat @ https://twitter.com/0xsat/status/1492927005901340672?s=20&t=9jslhLz9C45Qqa1z9VbHYA
+    unchecked {
+      count += 1;
+    }
+  
+    // Emit a Reveal Event
+    emit Reveal(msg.sender, low, high);
   }
 
+  /// >>>>>>>>>>>>>>>>>>>>  STAMP <> RECEDE  <<<<<<<<<<<<<<<<<<< ///
+
+  /// @notice Accepts the given bid
+  function stamp(
+
+  ) external {
+    // Check past the reveal phase
+    if(block.timestamp < arbitration) revert WrongPhase();
+
+    // Check the user revealed
+    if(reveals[msg.sender] != 0)
+  }
 }
